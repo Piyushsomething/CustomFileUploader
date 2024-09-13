@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>File Management System</title>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;700&display=swap" rel="stylesheet">
+    <style>
+        body, html {
+            font-family: 'Roboto', sans-serif;
+            margin: 0;
+            padding: 0;
+            height: 100%;
+            background-color: #f0f4f8;
+        }
+        .container {
+            display: flex;
+            height: 100%;
+        }
+        .screen {
+            flex: 1;
+            padding: 2rem;
+            overflow-y: auto;
+        }
+        .screen-1 {
+            background-color: #ffffff;
+        }
+        .screen-2 {
+            background-color: #e8eef1;
+        }
+        h1, h2 {
+            color: #2c3e50;
+            margin-bottom: 1rem;
+            text-align: center;
+        }
+        .upload-section, .file-list, .main-info {
+            background-color: #ffffff;
+            border-radius: 8px;
+            padding: 1.5rem;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            margin-bottom: 2rem;
+        }
+        input[type="file"] {
+            display: none;
+        }
+        .custom-file-upload {
+            display: inline-block;
+            padding: 10px 15px;
+            cursor: pointer;
+            background-color: #3498db;
+            color: white;
+            border-radius: 4px;
+            transition: background-color 0.3s;
+        }
+        .custom-file-upload:hover {
+            background-color: #2980b9;
+        }
+        button {
+            background-color: #2ecc71;
+            color: white;
+            border: none;
+            padding: 10px 15px;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+        button:hover {
+            background-color: #27ae60;
+        }
+        ul {
+            list-style-type: none;
+            padding: 0;
+        }
+        li {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px;
+            background-color: #f8f9fa;
+            margin-bottom: 8px;
+            border-radius: 4px;
+        }
+        .delete-btn {
+            background-color: #e74c3c;
+        }
+        .delete-btn:hover {
+            background-color: #c0392b;
+        }
+        #jsonOutput {
+            background-color: #2c3e50;
+            color: #ecf0f1;
+            padding: 1rem;
+            border-radius: 4px;
+            font-family: monospace;
+            white-space: pre-wrap;
+            overflow-x: auto;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="screen screen-1">
+            <h1>नाRAD: Custom File Uploader</h1>
+            <div class="upload-section">
+                <h2>Upload User File</h2>
+                <label for="fileInput" class="custom-file-upload">
+                    Choose File
+                </label>
+                <input type="file" id="fileInput" onChange="uploadFile()">
+            </div>
+            <div class="file-list">
+                <h2>Temp Folder Files</h2>
+                <ul id="tempFilesList"></ul>
+            </div>
+            <button onclick="finalizeFiles('move')">Move Files to Main</button>
+            <button onclick="finalizeFiles('copy')">Copy Files to Main</button>
+        </div>
+        <div class="screen screen-2">
+            <h1>नाRAD Database</h1>
+            <div class="file-list">
+                <h2>Custom User Files</h2>
+                <ul id="mainFilesList"></ul>
+            </div>
+            <div class="main-info">
+                <h2>Custom Files Info (JSON)</h2>
+                <div id="jsonOutput"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_URL = 'http://localhost:8000';
+
+        async function uploadFile() {
+            const fileInput = document.getElementById('fileInput');
+            const file = fileInput.files[0];
+            if (!file) {
+                alert('Please select a file');
+                return;
+            }
+
+            const formData = new FormData();
+            formData.append('file', file);
+
+            try {
+                const response = await fetch(`${API_URL}/upload/`, {
+                    method: 'POST',
+                    body: formData
+                });
+                const result = await response.json();
+                alert(result.status);
+                await refreshTempFiles();
+            } catch (error) {
+                console.error('Error:', error);
+                alert('Upload failed');
+            }
+        }
+
+        async function refreshTempFiles() {
+            const response = await fetch(`${API_URL}/temp-files/`);
+            const data = await response.json();
+            const tempFilesList = document.getElementById('tempFilesList');
+            tempFilesList.innerHTML = '';
+            data.files.forEach(file => {
+                const li = document.createElement('li');
+                li.innerHTML = `
+                    <span>${file}</span>
+                    <button class="delete-btn" onclick="deleteFile('${file}')">Delete</button>
+                `;
+                tempFilesList.appendChild(li);
+            });
+        }
+
+        async function deleteFile(filename) {
+            try {
+                const response = await fetch(`${API_URL}/temp-files/${filename}`, {
+                    method: 'DELETE'
+                });
+                const result = await response.json();
+                alert(result.status);
+                await refreshTempFiles();
+            } catch (error) {
+                console.error('Error:', error);
+                alert('Delete failed');
+            }
+        }
+
+        async function finalizeFiles(action) {
+            try {
+                const response = await fetch(`${API_URL}/finalize/?action=${action}`, {
+                    method: 'POST'
+                });
+                const result = await response.json();
+                alert(result.status);
+                await refreshTempFiles();
+                await refreshMainFiles();
+                await refreshMainFilesInfo();
+            } catch (error) {
+                console.error('Error:', error);
+                alert('Finalize failed');
+            }
+        }
+
+        async function refreshMainFiles() {
+            const response = await fetch(`${API_URL}/main-files/`);
+            const data = await response.json();
+            const mainFilesList = document.getElementById('mainFilesList');
+            mainFilesList.innerHTML = '';
+            data.files.forEach(file => {
+                const li = document.createElement('li');
+                li.textContent = file;
+                mainFilesList.appendChild(li);
+            });
+        }
+
+        async function refreshMainFilesInfo() {
+            const response = await fetch(`${API_URL}/main-files-info/`);
+            const data = await response.json();
+            const jsonOutput = document.getElementById('jsonOutput');
+            jsonOutput.textContent = JSON.stringify(data, null, 2);
+        }
+
+        // Initial load
+        refreshTempFiles();
+        refreshMainFiles();
+        refreshMainFilesInfo();
+    </script>
+</body>
+</html>
